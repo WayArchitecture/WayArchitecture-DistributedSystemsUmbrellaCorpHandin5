@@ -1,0 +1,2 @@
+# WayArchitecture-DistributedSystemsUmbrellaCorpHandin5
+Mandatory Activity 5
