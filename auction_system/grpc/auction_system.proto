@@ -1,0 +1,52 @@
+
+syntax = "proto3";
+option go_package = "auction_system/grpc/proto";
+
+message Nothing {}
+
+message Amount {
+    int32 amount = 1;
+    int32 uniqueIdentifier = 2;
+}
+
+message Acknowledgement {
+    string status = 1;  //fail, success, exception
+}
+
+message Outcome {
+    string highestBid = 1;
+    bool isOver = 2;
+    int32 highestBidUniqueIdentifier = 3;
+}
+
+message Node {
+    int32 id = 1;
+    string address = 2;
+    bool isLeader = 3;
+}
+
+message Client {
+    string address = 1;
+}
+
+message Clients {
+    repeated Client clients = 1;
+}
+
+message PrimaryState {
+    int32 highestBid = 1;
+    Clients clients = 2;
+    int32 auctionEndTime = 3;
+    int32 uniqueIdentifier = 4;
+}
+
+service AuctionService {
+    rpc RegisterBackupNode(Node) returns (Node);
+    rpc PingPrimaryNodeFromBackup(Nothing) returns (Nothing);
+
+    rpc Bid(Amount) returns (Acknowledgement);
+    rpc Result(Nothing) returns (Outcome);
+    rpc PrimaryUpdateToBackup(PrimaryState) returns (Nothing);
+    rpc PrimaryElection(Nothing) returns (Nothing);
+    rpc NodeChangeToClient(Nothing) returns (Nothing);
+}
