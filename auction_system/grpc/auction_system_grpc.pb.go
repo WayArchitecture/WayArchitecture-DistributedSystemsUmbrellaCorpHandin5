@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AuctionService_RegisterBackupNode_FullMethodName        = "/AuctionService/RegisterBackupNode"
 	AuctionService_PingPrimaryNodeFromBackup_FullMethodName = "/AuctionService/PingPrimaryNodeFromBackup"
+	AuctionService_RegisterClient_FullMethodName            = "/AuctionService/RegisterClient"
 	AuctionService_Bid_FullMethodName                       = "/AuctionService/Bid"
 	AuctionService_Result_FullMethodName                    = "/AuctionService/Result"
 	AuctionService_PrimaryUpdateToBackup_FullMethodName     = "/AuctionService/PrimaryUpdateToBackup"
@@ -34,6 +35,7 @@ const (
 type AuctionServiceClient interface {
 	RegisterBackupNode(ctx context.Context, in *Node, opts ...grpc.CallOption) (*Node, error)
 	PingPrimaryNodeFromBackup(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error)
+	RegisterClient(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Node, error)
 	Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Acknowledgement, error)
 	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
 	PrimaryUpdateToBackup(ctx context.Context, in *PrimaryState, opts ...grpc.CallOption) (*Nothing, error)
@@ -63,6 +65,16 @@ func (c *auctionServiceClient) PingPrimaryNodeFromBackup(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Nothing)
 	err := c.cc.Invoke(ctx, AuctionService_PingPrimaryNodeFromBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionServiceClient) RegisterClient(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Node, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Node)
+	err := c.cc.Invoke(ctx, AuctionService_RegisterClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +137,7 @@ func (c *auctionServiceClient) NodeChangeToClient(ctx context.Context, in *Nothi
 type AuctionServiceServer interface {
 	RegisterBackupNode(context.Context, *Node) (*Node, error)
 	PingPrimaryNodeFromBackup(context.Context, *Nothing) (*Nothing, error)
+	RegisterClient(context.Context, *Nothing) (*Node, error)
 	Bid(context.Context, *Amount) (*Acknowledgement, error)
 	Result(context.Context, *Nothing) (*Outcome, error)
 	PrimaryUpdateToBackup(context.Context, *PrimaryState) (*Nothing, error)
@@ -145,6 +158,9 @@ func (UnimplementedAuctionServiceServer) RegisterBackupNode(context.Context, *No
 }
 func (UnimplementedAuctionServiceServer) PingPrimaryNodeFromBackup(context.Context, *Nothing) (*Nothing, error) {
 	return nil, status.Error(codes.Unimplemented, "method PingPrimaryNodeFromBackup not implemented")
+}
+func (UnimplementedAuctionServiceServer) RegisterClient(context.Context, *Nothing) (*Node, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterClient not implemented")
 }
 func (UnimplementedAuctionServiceServer) Bid(context.Context, *Amount) (*Acknowledgement, error) {
 	return nil, status.Error(codes.Unimplemented, "method Bid not implemented")
@@ -214,6 +230,24 @@ func _AuctionService_PingPrimaryNodeFromBackup_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuctionServiceServer).PingPrimaryNodeFromBackup(ctx, req.(*Nothing))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuctionService_RegisterClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Nothing)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).RegisterClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_RegisterClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).RegisterClient(ctx, req.(*Nothing))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -322,6 +356,10 @@ var AuctionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PingPrimaryNodeFromBackup",
 			Handler:    _AuctionService_PingPrimaryNodeFromBackup_Handler,
+		},
+		{
+			MethodName: "RegisterClient",
+			Handler:    _AuctionService_RegisterClient_Handler,
 		},
 		{
 			MethodName: "Bid",

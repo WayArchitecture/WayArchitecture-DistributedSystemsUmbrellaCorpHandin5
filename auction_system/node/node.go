@@ -25,7 +25,9 @@ type Server struct {
 	myPbNode   *pb.Node
 	leaderNode *NodeStruct
 	nodes      map[int]NodeStruct
+
 	clients    []*pb.Client
+	highestBid int64
 }
 
 func main() {
@@ -159,4 +161,33 @@ func startPingingLeaderNode(s *Server) {
 func (s *Server) PingPrimaryNodeFromBackup(ctx context.Context, req *pb.Nothing) (*pb.Nothing, error) {
 	fmt.Println("ping from leader...")
 	return &pb.Nothing{}, nil
+}
+
+func (s *Server) RegisterClient(ctx context.Context, req *pb.Nothing) (*pb.Node, error) {
+	if s.leaderNode != nil {
+		return s.leaderNode.pbNode, nil
+	}
+
+	return s.myPbNode, nil
+}
+
+func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, error) {
+	fmt.Println("Bid... Amount:", req.Amount)
+
+	ack := pb.Acknowledgement{
+		Status: "success",
+	}
+
+	return &ack, nil
+}
+
+func (s *Server) Result(ctx context.Context, req *pb.Nothing) (*pb.Outcome, error) {
+	fmt.Println("Result...")
+
+	ack := pb.Outcome{
+		HighestBid: 10,
+		IsOver:     false,
+	}
+
+	return &ack, nil
 }
