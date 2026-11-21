@@ -38,6 +38,16 @@ message PrimaryState {
     int32 uniqueIdentifier = 4;
 }
 
+message Candidate {
+    int32 id = 1;
+    int32 electionNumber = 2;
+}
+
+message ElectionState {
+    int32 highestBid = 1;
+    int32 auctionEndTime = 2;
+}
+
 service AuctionService {
     rpc RegisterBackupNode(Node) returns (Node);
     rpc PingPrimaryNodeFromBackup(Nothing) returns (Nothing);
@@ -46,6 +56,8 @@ service AuctionService {
     rpc Result(Nothing) returns (Outcome);
 
     rpc PrimaryUpdateToBackup(PrimaryState) returns (Nothing);
-    rpc PrimaryElection(Nothing) returns (Nothing);
-    rpc NodeChangeToClient(Nothing) returns (Nothing);
+    rpc StartElection(Candidate) returns (Nothing);
+    rpc CompareCandidate(Candidate) returns (Candidate);
+    rpc CompareState(ElectionState) returns (ElectionState);
+    rpc ElectLeader(Candidate) returns (Nothing);
 }
