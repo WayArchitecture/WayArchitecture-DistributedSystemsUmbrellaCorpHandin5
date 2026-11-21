@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,11 +40,12 @@ func main() {
 	nodeFound := false
 	var leaderNode *pb.Node
 	var err error
+	var conn *grpc.ClientConn
 	//find a node
 	for i := range MAX_NB_NODES {
 		address := "localhost:505" + strconv.Itoa(i)
 		fmt.Println("checking: " + address)
-		conn, _ := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, _ = grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		client = pb.NewAuctionServiceClient(conn)
 
@@ -52,7 +54,7 @@ func main() {
 		if err == nil {
 			nodeFound = true
 			if leaderNode.Id != int32(i) {
-				conn, _ := grpc.NewClient(leaderNode.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				conn, _ = grpc.NewClient(leaderNode.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				client = pb.NewAuctionServiceClient(conn)
 				defer conn.Close()
 			}
@@ -90,10 +92,103 @@ func main() {
 			Amount: bidAmount,
 		}
 
-		var ack, _ = client.Bid(context.Background(), amount)
-		fmt.Println("ack:", ack.Status)
+		bidCtx, bidCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		//Bid
+		var ack, bidErr = client.Bid(bidCtx, amount)
 
-		var outcome, _ = client.Result(context.Background(), &pb.Nothing{})
-		fmt.Println("outcome:", outcome.HighestBid)
+		bidCancel()
+
+		if bidErr != nil {
+			fmt.Println("Primary node is unreachable:", bidErr)
+			newLeader, newClient, newConn, findErr := FindLeader(MAX_NB_NODES)
+			if findErr == nil {
+				leaderNode = newLeader
+				client = newClient
+				oldConn := conn
+				conn = newConn
+
+				if oldConn != nil {
+					oldConn.Close()
+				}
+			} else {
+				fmt.Print(findErr)
+				return
+			}
+		}
+
+		if ack != nil {
+			fmt.Println("ack:", ack.Status)
+		}
+
+		resultCtx, resultCancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+		var outcome, resultErr = client.Result(resultCtx, &pb.Nothing{})
+
+		resultCancel()
+
+		if resultErr != nil {
+			fmt.Println("Primary node is unreachable:", resultErr)
+			newLeader, newClient, newConn, findErr := FindLeader(MAX_NB_NODES)
+			if findErr == nil {
+				leaderNode = newLeader
+				client = newClient
+				oldConn := conn
+				conn = newConn
+
+				if oldConn != nil {
+					oldConn.Close()
+				}
+				continue
+			} else {
+				fmt.Print(findErr)
+				return
+			}
+		}
+
+		if outcome != nil {
+			fmt.Println("outcome:", outcome.HighestBid)
+		}
 	}
+}
+
+func FindLeader(MAX_NB_NODES int) (*pb.Node, pb.AuctionServiceClient, *grpc.ClientConn, error) {
+	for range 3 {
+		fmt.Println("Looking for new leader...")
+		time.Sleep(3 * time.Second)
+
+		for i := range MAX_NB_NODES {
+			address := "localhost:505" + strconv.Itoa(i)
+			fmt.Println("checking: " + address)
+			conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+			if err != nil {
+				continue
+			}
+
+			nodeClient := pb.NewAuctionServiceClient(conn)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			leaderNode, err := nodeClient.RegisterClient(ctx, &pb.Nothing{})
+			cancel()
+
+			conn.Close()
+
+			if err != nil || leaderNode == nil {
+				continue
+			}
+
+			leaderConn, err := grpc.NewClient(
+				leaderNode.Address,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
+			if err != nil {
+				continue
+			}
+
+			leaderClient := pb.NewAuctionServiceClient(leaderConn)
+
+			return leaderNode, leaderClient, leaderConn, nil
+		}
+	}
+	return nil, nil, nil, fmt.Errorf("Could not find a leader after 3 attempts")
 }
