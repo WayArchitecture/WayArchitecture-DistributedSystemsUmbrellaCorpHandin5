@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -118,7 +119,7 @@ func main() {
 
 		if ack != nil {
 			switch ack.Status {
-			case "Fail":
+			case "Fail: Too low":
 				fmt.Println("Bid was not higher than the current highest.")
 			case "Success":
 				fmt.Println("Successfully places bid.")
@@ -151,7 +152,15 @@ func main() {
 		}
 
 		if outcome != nil {
-			fmt.Println("outcome:", outcome.HighestBid)
+			timeleft := int64(outcome.AuctionEndTime) - time.Now().Unix()
+			if !outcome.IsOver {
+				fmt.Println("Current highest bid:", outcome.HighestBid)
+				fmt.Println("Action ends in", timeleft, "seconds.")
+			} else {
+				fmt.Println("Auction has ended.")
+				fmt.Println("Action ended", math.Abs(float64(timeleft)), "seconds ago.")
+				fmt.Println("The highest bid was", outcome.HighestBid)
+			}
 		}
 	}
 }

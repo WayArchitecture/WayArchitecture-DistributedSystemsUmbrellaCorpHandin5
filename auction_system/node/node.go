@@ -250,13 +250,13 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 		fmt.Println("Auction has ended!")
 
 		return &pb.Acknowledgement{
-			Status: "Fail",
+			Status: "Fail: Over",
 		}, nil
 	}
 	//Check if bid is valid
 	if req.Amount < s.highestBid || req.Amount == s.highestBid {
 		s.mu.Unlock()
-		return &pb.Acknowledgement{Status: "Fail"}, nil
+		return &pb.Acknowledgement{Status: "Fail: Too low"}, nil
 	}
 
 	//Update backup nodes
@@ -298,8 +298,9 @@ func (s *Server) Result(ctx context.Context, req *pb.Nothing) (*pb.Outcome, erro
 	isOver := !time.Now().Before(s.auctionEndTime)
 
 	ack := pb.Outcome{
-		HighestBid: s.highestBid,
-		IsOver:     isOver,
+		HighestBid:     s.highestBid,
+		IsOver:         isOver,
+		AuctionEndTime: int32(s.auctionEndTime.Unix()),
 	}
 
 	return &ack, nil

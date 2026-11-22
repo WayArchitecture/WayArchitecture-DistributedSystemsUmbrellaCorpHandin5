@@ -146,11 +146,12 @@ func (x *Acknowledgement) GetStatus() string {
 }
 
 type Outcome struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HighestBid    int64                  `protobuf:"varint,1,opt,name=highestBid,proto3" json:"highestBid,omitempty"`
-	IsOver        bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	HighestBid     int64                  `protobuf:"varint,1,opt,name=highestBid,proto3" json:"highestBid,omitempty"`
+	IsOver         bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
+	AuctionEndTime int32                  `protobuf:"varint,3,opt,name=auctionEndTime,proto3" json:"auctionEndTime,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Outcome) Reset() {
@@ -195,6 +196,13 @@ func (x *Outcome) GetIsOver() bool {
 		return x.IsOver
 	}
 	return false
+}
+
+func (x *Outcome) GetAuctionEndTime() int32 {
+	if x != nil {
+		return x.AuctionEndTime
+	}
+	return 0
 }
 
 type Node struct {
@@ -518,12 +526,13 @@ const file_grpc_auction_system_proto_rawDesc = "" +
 	"\x06Amount\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x03R\x06amount\")\n" +
 	"\x0fAcknowledgement\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"A\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"i\n" +
 	"\aOutcome\x12\x1e\n" +
 	"\n" +
 	"highestBid\x18\x01 \x01(\x03R\n" +
 	"highestBid\x12\x16\n" +
-	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"L\n" +
+	"\x06isOver\x18\x02 \x01(\bR\x06isOver\x12&\n" +
+	"\x0eauctionEndTime\x18\x03 \x01(\x05R\x0eauctionEndTime\"L\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +

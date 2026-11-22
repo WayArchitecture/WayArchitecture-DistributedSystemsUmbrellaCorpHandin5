@@ -15,6 +15,7 @@ message Acknowledgement {
 message Outcome {
     int64 highestBid = 1;
     bool isOver = 2;
+    int32 auctionEndTime = 3;
 }
 
 message Node {
