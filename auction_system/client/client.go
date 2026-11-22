@@ -33,7 +33,7 @@ func main() {
 	students, _ = client.GetStudents(context.Background(), &pb.Nothing{})
 	fmt.Println(students)*/
 
-	var MAX_NB_NODES = 3
+	var MAX_NB_NODES = 5
 	//var MAX_NB_CLIENTS = 10
 
 	var client pb.AuctionServiceClient
@@ -100,10 +100,10 @@ func main() {
 
 		if bidErr != nil {
 			fmt.Println("Primary node is unreachable:", bidErr)
-			newLeader, newClient, newConn, findErr := FindLeader(MAX_NB_NODES)
+			newLeader, newConn, findErr := FindLeader(MAX_NB_NODES)
 			if findErr == nil {
 				leaderNode = newLeader
-				client = newClient
+				client = pb.NewAuctionServiceClient(newConn)
 				oldConn := conn
 				conn = newConn
 
@@ -128,10 +128,10 @@ func main() {
 
 		if resultErr != nil {
 			fmt.Println("Primary node is unreachable:", resultErr)
-			newLeader, newClient, newConn, findErr := FindLeader(MAX_NB_NODES)
+			newLeader, newConn, findErr := FindLeader(MAX_NB_NODES)
 			if findErr == nil {
 				leaderNode = newLeader
-				client = newClient
+				client = pb.NewAuctionServiceClient(newConn)
 				oldConn := conn
 				conn = newConn
 
@@ -151,10 +151,9 @@ func main() {
 	}
 }
 
-func FindLeader(MAX_NB_NODES int) (*pb.Node, pb.AuctionServiceClient, *grpc.ClientConn, error) {
-	for range 3 {
+func FindLeader(MAX_NB_NODES int) (*pb.Node, *grpc.ClientConn, error) {
+	for range 5 {
 		fmt.Println("Looking for new leader...")
-		time.Sleep(3 * time.Second)
 
 		for i := range MAX_NB_NODES {
 			address := "localhost:505" + strconv.Itoa(i)
@@ -173,7 +172,12 @@ func FindLeader(MAX_NB_NODES int) (*pb.Node, pb.AuctionServiceClient, *grpc.Clie
 
 			conn.Close()
 
-			if err != nil || leaderNode == nil {
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if leaderNode == nil {
+				fmt.Println("Leader node not set in current node")
 				continue
 			}
 
@@ -185,10 +189,23 @@ func FindLeader(MAX_NB_NODES int) (*pb.Node, pb.AuctionServiceClient, *grpc.Clie
 				continue
 			}
 
+			// Verify that leader is actually reachable
 			leaderClient := pb.NewAuctionServiceClient(leaderConn)
 
-			return leaderNode, leaderClient, leaderConn, nil
+			verifyCtx, verifyCancel := context.WithTimeout(
+				context.Background(), 3*time.Second,
+			)
+			_, err = leaderClient.Result(verifyCtx, &pb.Nothing{})
+			verifyCancel()
+
+			if err == nil {
+				return leaderNode, leaderConn, nil
+			}
+
+			leaderConn.Close()
 		}
+
+		time.Sleep(3 * time.Second)
 	}
-	return nil, nil, nil, fmt.Errorf("Could not find a leader after 3 attempts")
+	return nil, nil, fmt.Errorf("Could not find a leader after 3 attempts")
 }

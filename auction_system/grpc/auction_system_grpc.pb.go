@@ -26,6 +26,8 @@ const (
 	AuctionService_Result_FullMethodName                    = "/AuctionService/Result"
 	AuctionService_PrimaryUpdateToBackup_FullMethodName     = "/AuctionService/PrimaryUpdateToBackup"
 	AuctionService_StartElection_FullMethodName             = "/AuctionService/StartElection"
+	AuctionService_PingElectionHandler_FullMethodName       = "/AuctionService/PingElectionHandler"
+	AuctionService_ReceivePing_FullMethodName               = "/AuctionService/ReceivePing"
 	AuctionService_CompareCandidate_FullMethodName          = "/AuctionService/CompareCandidate"
 	AuctionService_CompareState_FullMethodName              = "/AuctionService/CompareState"
 	AuctionService_ElectLeader_FullMethodName               = "/AuctionService/ElectLeader"
@@ -41,7 +43,9 @@ type AuctionServiceClient interface {
 	Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Acknowledgement, error)
 	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
 	PrimaryUpdateToBackup(ctx context.Context, in *PrimaryState, opts ...grpc.CallOption) (*Nothing, error)
-	StartElection(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Nothing, error)
+	StartElection(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Acknowledgement, error)
+	PingElectionHandler(ctx context.Context, in *Node, opts ...grpc.CallOption) (*Nothing, error)
+	ReceivePing(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error)
 	CompareCandidate(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Candidate, error)
 	CompareState(ctx context.Context, in *ElectionState, opts ...grpc.CallOption) (*ElectionState, error)
 	ElectLeader(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Nothing, error)
@@ -115,10 +119,30 @@ func (c *auctionServiceClient) PrimaryUpdateToBackup(ctx context.Context, in *Pr
 	return out, nil
 }
 
-func (c *auctionServiceClient) StartElection(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Nothing, error) {
+func (c *auctionServiceClient) StartElection(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Acknowledgement, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Acknowledgement)
+	err := c.cc.Invoke(ctx, AuctionService_StartElection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionServiceClient) PingElectionHandler(ctx context.Context, in *Node, opts ...grpc.CallOption) (*Nothing, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Nothing)
-	err := c.cc.Invoke(ctx, AuctionService_StartElection_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AuctionService_PingElectionHandler_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionServiceClient) ReceivePing(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Nothing)
+	err := c.cc.Invoke(ctx, AuctionService_ReceivePing_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +189,9 @@ type AuctionServiceServer interface {
 	Bid(context.Context, *Amount) (*Acknowledgement, error)
 	Result(context.Context, *Nothing) (*Outcome, error)
 	PrimaryUpdateToBackup(context.Context, *PrimaryState) (*Nothing, error)
-	StartElection(context.Context, *Candidate) (*Nothing, error)
+	StartElection(context.Context, *Candidate) (*Acknowledgement, error)
+	PingElectionHandler(context.Context, *Node) (*Nothing, error)
+	ReceivePing(context.Context, *Nothing) (*Nothing, error)
 	CompareCandidate(context.Context, *Candidate) (*Candidate, error)
 	CompareState(context.Context, *ElectionState) (*ElectionState, error)
 	ElectLeader(context.Context, *Candidate) (*Nothing, error)
@@ -197,8 +223,14 @@ func (UnimplementedAuctionServiceServer) Result(context.Context, *Nothing) (*Out
 func (UnimplementedAuctionServiceServer) PrimaryUpdateToBackup(context.Context, *PrimaryState) (*Nothing, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrimaryUpdateToBackup not implemented")
 }
-func (UnimplementedAuctionServiceServer) StartElection(context.Context, *Candidate) (*Nothing, error) {
+func (UnimplementedAuctionServiceServer) StartElection(context.Context, *Candidate) (*Acknowledgement, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartElection not implemented")
+}
+func (UnimplementedAuctionServiceServer) PingElectionHandler(context.Context, *Node) (*Nothing, error) {
+	return nil, status.Error(codes.Unimplemented, "method PingElectionHandler not implemented")
+}
+func (UnimplementedAuctionServiceServer) ReceivePing(context.Context, *Nothing) (*Nothing, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReceivePing not implemented")
 }
 func (UnimplementedAuctionServiceServer) CompareCandidate(context.Context, *Candidate) (*Candidate, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompareCandidate not implemented")
@@ -356,6 +388,42 @@ func _AuctionService_StartElection_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuctionService_PingElectionHandler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Node)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).PingElectionHandler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_PingElectionHandler_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).PingElectionHandler(ctx, req.(*Node))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuctionService_ReceivePing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Nothing)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).ReceivePing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_ReceivePing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).ReceivePing(ctx, req.(*Nothing))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuctionService_CompareCandidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Candidate)
 	if err := dec(in); err != nil {
@@ -444,6 +512,14 @@ var AuctionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartElection",
 			Handler:    _AuctionService_StartElection_Handler,
+		},
+		{
+			MethodName: "PingElectionHandler",
+			Handler:    _AuctionService_PingElectionHandler_Handler,
+		},
+		{
+			MethodName: "ReceivePing",
+			Handler:    _AuctionService_ReceivePing_Handler,
 		},
 		{
 			MethodName: "CompareCandidate",
