@@ -4,12 +4,14 @@ option go_package = "auction_system/grpc/proto";
 
 message Nothing {}
 
-message Amount {
+message BidRequest {
     int64 amount = 1;
+    int64 clientId = 2;
 }
 
 message Acknowledgement {
     string status = 1;  //fail, success, exception
+    int64 clientId =2; 
 }
 
 message Outcome {
@@ -25,7 +27,8 @@ message Node {
 }
 
 message Client {
-    string address = 1;
+    int64 clientId = 1;
+    int64 highestBid = 2;
 }
 
 message Clients {
@@ -34,8 +37,9 @@ message Clients {
 
 message PrimaryState {
     int64 highestBid = 1;
-    int32 auctionEndTime = 2;
-    int32 uniqueIdentifier = 3;
+    Clients clients = 2;
+    int32 auctionEndTime = 3;
+    int32 uniqueIdentifier = 4;
 }
 
 message Candidate {
@@ -46,13 +50,14 @@ message Candidate {
 message ElectionState {
     int64 highestBid = 1;
     int32 auctionEndTime = 2;
+    Clients clients = 3;
 }
 
 service AuctionService {
     rpc RegisterBackupNode(Node) returns (Node);
     rpc PingPrimaryNodeFromBackup(Nothing) returns (Nothing);
     rpc RegisterClient(Nothing) returns (Node);
-    rpc Bid(Amount) returns (Acknowledgement);
+    rpc Bid(BidRequest) returns (Acknowledgement);
     rpc Result(Nothing) returns (Outcome);
 
     rpc PrimaryUpdateToBackup(PrimaryState) returns (Nothing);

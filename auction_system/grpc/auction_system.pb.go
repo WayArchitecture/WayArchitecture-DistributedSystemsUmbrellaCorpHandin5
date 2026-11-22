@@ -57,27 +57,28 @@ func (*Nothing) Descriptor() ([]byte, []int) {
 	return file_grpc_auction_system_proto_rawDescGZIP(), []int{0}
 }
 
-type Amount struct {
+type BidRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Amount        int64                  `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	ClientId      int64                  `protobuf:"varint,2,opt,name=clientId,proto3" json:"clientId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Amount) Reset() {
-	*x = Amount{}
+func (x *BidRequest) Reset() {
+	*x = BidRequest{}
 	mi := &file_grpc_auction_system_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Amount) String() string {
+func (x *BidRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Amount) ProtoMessage() {}
+func (*BidRequest) ProtoMessage() {}
 
-func (x *Amount) ProtoReflect() protoreflect.Message {
+func (x *BidRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_grpc_auction_system_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -89,14 +90,21 @@ func (x *Amount) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Amount.ProtoReflect.Descriptor instead.
-func (*Amount) Descriptor() ([]byte, []int) {
+// Deprecated: Use BidRequest.ProtoReflect.Descriptor instead.
+func (*BidRequest) Descriptor() ([]byte, []int) {
 	return file_grpc_auction_system_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Amount) GetAmount() int64 {
+func (x *BidRequest) GetAmount() int64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *BidRequest) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
 	}
 	return 0
 }
@@ -104,6 +112,7 @@ func (x *Amount) GetAmount() int64 {
 type Acknowledgement struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` //fail, success, exception
+	ClientId      int64                  `protobuf:"varint,2,opt,name=clientId,proto3" json:"clientId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -143,6 +152,13 @@ func (x *Acknowledgement) GetStatus() string {
 		return x.Status
 	}
 	return ""
+}
+
+func (x *Acknowledgement) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
 }
 
 type Outcome struct {
@@ -267,7 +283,8 @@ func (x *Node) GetIsLeader() bool {
 
 type Client struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Address       string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	ClientId      int64                  `protobuf:"varint,1,opt,name=clientId,proto3" json:"clientId,omitempty"`
+	HighestBid    int64                  `protobuf:"varint,2,opt,name=highestBid,proto3" json:"highestBid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -302,11 +319,18 @@ func (*Client) Descriptor() ([]byte, []int) {
 	return file_grpc_auction_system_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *Client) GetAddress() string {
+func (x *Client) GetClientId() int64 {
 	if x != nil {
-		return x.Address
+		return x.ClientId
 	}
-	return ""
+	return 0
+}
+
+func (x *Client) GetHighestBid() int64 {
+	if x != nil {
+		return x.HighestBid
+	}
+	return 0
 }
 
 type Clients struct {
@@ -356,8 +380,9 @@ func (x *Clients) GetClients() []*Client {
 type PrimaryState struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	HighestBid       int64                  `protobuf:"varint,1,opt,name=highestBid,proto3" json:"highestBid,omitempty"`
-	AuctionEndTime   int32                  `protobuf:"varint,2,opt,name=auctionEndTime,proto3" json:"auctionEndTime,omitempty"`
-	UniqueIdentifier int32                  `protobuf:"varint,3,opt,name=uniqueIdentifier,proto3" json:"uniqueIdentifier,omitempty"`
+	Clients          *Clients               `protobuf:"bytes,2,opt,name=clients,proto3" json:"clients,omitempty"`
+	AuctionEndTime   int32                  `protobuf:"varint,3,opt,name=auctionEndTime,proto3" json:"auctionEndTime,omitempty"`
+	UniqueIdentifier int32                  `protobuf:"varint,4,opt,name=uniqueIdentifier,proto3" json:"uniqueIdentifier,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -397,6 +422,13 @@ func (x *PrimaryState) GetHighestBid() int64 {
 		return x.HighestBid
 	}
 	return 0
+}
+
+func (x *PrimaryState) GetClients() *Clients {
+	if x != nil {
+		return x.Clients
+	}
+	return nil
 }
 
 func (x *PrimaryState) GetAuctionEndTime() int32 {
@@ -469,6 +501,7 @@ type ElectionState struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	HighestBid     int64                  `protobuf:"varint,1,opt,name=highestBid,proto3" json:"highestBid,omitempty"`
 	AuctionEndTime int32                  `protobuf:"varint,2,opt,name=auctionEndTime,proto3" json:"auctionEndTime,omitempty"`
+	Clients        *Clients               `protobuf:"bytes,3,opt,name=clients,proto3" json:"clients,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -517,16 +550,26 @@ func (x *ElectionState) GetAuctionEndTime() int32 {
 	return 0
 }
 
+func (x *ElectionState) GetClients() *Clients {
+	if x != nil {
+		return x.Clients
+	}
+	return nil
+}
+
 var File_grpc_auction_system_proto protoreflect.FileDescriptor
 
 const file_grpc_auction_system_proto_rawDesc = "" +
 	"\n" +
 	"\x19grpc/auction_system.proto\"\t\n" +
-	"\aNothing\" \n" +
-	"\x06Amount\x12\x16\n" +
-	"\x06amount\x18\x01 \x01(\x03R\x06amount\")\n" +
+	"\aNothing\"@\n" +
+	"\n" +
+	"BidRequest\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12\x1a\n" +
+	"\bclientId\x18\x02 \x01(\x03R\bclientId\"E\n" +
 	"\x0fAcknowledgement\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\"i\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x1a\n" +
+	"\bclientId\x18\x02 \x01(\x03R\bclientId\"i\n" +
 	"\aOutcome\x12\x1e\n" +
 	"\n" +
 	"highestBid\x18\x01 \x01(\x03R\n" +
@@ -536,30 +579,35 @@ const file_grpc_auction_system_proto_rawDesc = "" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
-	"\bisLeader\x18\x03 \x01(\bR\bisLeader\"\"\n" +
-	"\x06Client\x12\x18\n" +
-	"\aaddress\x18\x01 \x01(\tR\aaddress\",\n" +
+	"\bisLeader\x18\x03 \x01(\bR\bisLeader\"D\n" +
+	"\x06Client\x12\x1a\n" +
+	"\bclientId\x18\x01 \x01(\x03R\bclientId\x12\x1e\n" +
+	"\n" +
+	"highestBid\x18\x02 \x01(\x03R\n" +
+	"highestBid\",\n" +
 	"\aClients\x12!\n" +
-	"\aclients\x18\x01 \x03(\v2\a.ClientR\aclients\"\x82\x01\n" +
+	"\aclients\x18\x01 \x03(\v2\a.ClientR\aclients\"\xa6\x01\n" +
 	"\fPrimaryState\x12\x1e\n" +
 	"\n" +
 	"highestBid\x18\x01 \x01(\x03R\n" +
-	"highestBid\x12&\n" +
-	"\x0eauctionEndTime\x18\x02 \x01(\x05R\x0eauctionEndTime\x12*\n" +
-	"\x10uniqueIdentifier\x18\x03 \x01(\x05R\x10uniqueIdentifier\"C\n" +
+	"highestBid\x12\"\n" +
+	"\aclients\x18\x02 \x01(\v2\b.ClientsR\aclients\x12&\n" +
+	"\x0eauctionEndTime\x18\x03 \x01(\x05R\x0eauctionEndTime\x12*\n" +
+	"\x10uniqueIdentifier\x18\x04 \x01(\x05R\x10uniqueIdentifier\"C\n" +
 	"\tCandidate\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12&\n" +
-	"\x0eelectionNumber\x18\x02 \x01(\x05R\x0eelectionNumber\"W\n" +
+	"\x0eelectionNumber\x18\x02 \x01(\x05R\x0eelectionNumber\"{\n" +
 	"\rElectionState\x12\x1e\n" +
 	"\n" +
 	"highestBid\x18\x01 \x01(\x03R\n" +
 	"highestBid\x12&\n" +
-	"\x0eauctionEndTime\x18\x02 \x01(\x05R\x0eauctionEndTime2\xf5\x03\n" +
+	"\x0eauctionEndTime\x18\x02 \x01(\x05R\x0eauctionEndTime\x12\"\n" +
+	"\aclients\x18\x03 \x01(\v2\b.ClientsR\aclients2\xf9\x03\n" +
 	"\x0eAuctionService\x12\"\n" +
 	"\x12RegisterBackupNode\x12\x05.Node\x1a\x05.Node\x12/\n" +
 	"\x19PingPrimaryNodeFromBackup\x12\b.Nothing\x1a\b.Nothing\x12!\n" +
-	"\x0eRegisterClient\x12\b.Nothing\x1a\x05.Node\x12 \n" +
-	"\x03Bid\x12\a.Amount\x1a\x10.Acknowledgement\x12\x1c\n" +
+	"\x0eRegisterClient\x12\b.Nothing\x1a\x05.Node\x12$\n" +
+	"\x03Bid\x12\v.BidRequest\x1a\x10.Acknowledgement\x12\x1c\n" +
 	"\x06Result\x12\b.Nothing\x1a\b.Outcome\x120\n" +
 	"\x15PrimaryUpdateToBackup\x12\r.PrimaryState\x1a\b.Nothing\x12-\n" +
 	"\rStartElection\x12\n" +
@@ -588,7 +636,7 @@ func file_grpc_auction_system_proto_rawDescGZIP() []byte {
 var file_grpc_auction_system_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_grpc_auction_system_proto_goTypes = []any{
 	(*Nothing)(nil),         // 0: Nothing
-	(*Amount)(nil),          // 1: Amount
+	(*BidRequest)(nil),      // 1: BidRequest
 	(*Acknowledgement)(nil), // 2: Acknowledgement
 	(*Outcome)(nil),         // 3: Outcome
 	(*Node)(nil),            // 4: Node
@@ -600,35 +648,37 @@ var file_grpc_auction_system_proto_goTypes = []any{
 }
 var file_grpc_auction_system_proto_depIdxs = []int32{
 	5,  // 0: Clients.clients:type_name -> Client
-	4,  // 1: AuctionService.RegisterBackupNode:input_type -> Node
-	0,  // 2: AuctionService.PingPrimaryNodeFromBackup:input_type -> Nothing
-	0,  // 3: AuctionService.RegisterClient:input_type -> Nothing
-	1,  // 4: AuctionService.Bid:input_type -> Amount
-	0,  // 5: AuctionService.Result:input_type -> Nothing
-	7,  // 6: AuctionService.PrimaryUpdateToBackup:input_type -> PrimaryState
-	8,  // 7: AuctionService.StartElection:input_type -> Candidate
-	4,  // 8: AuctionService.PingElectionHandler:input_type -> Node
-	0,  // 9: AuctionService.ReceivePing:input_type -> Nothing
-	8,  // 10: AuctionService.CompareCandidate:input_type -> Candidate
-	9,  // 11: AuctionService.CompareState:input_type -> ElectionState
-	8,  // 12: AuctionService.ElectLeader:input_type -> Candidate
-	4,  // 13: AuctionService.RegisterBackupNode:output_type -> Node
-	0,  // 14: AuctionService.PingPrimaryNodeFromBackup:output_type -> Nothing
-	4,  // 15: AuctionService.RegisterClient:output_type -> Node
-	2,  // 16: AuctionService.Bid:output_type -> Acknowledgement
-	3,  // 17: AuctionService.Result:output_type -> Outcome
-	0,  // 18: AuctionService.PrimaryUpdateToBackup:output_type -> Nothing
-	2,  // 19: AuctionService.StartElection:output_type -> Acknowledgement
-	0,  // 20: AuctionService.PingElectionHandler:output_type -> Nothing
-	0,  // 21: AuctionService.ReceivePing:output_type -> Nothing
-	8,  // 22: AuctionService.CompareCandidate:output_type -> Candidate
-	9,  // 23: AuctionService.CompareState:output_type -> ElectionState
-	0,  // 24: AuctionService.ElectLeader:output_type -> Nothing
-	13, // [13:25] is the sub-list for method output_type
-	1,  // [1:13] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	6,  // 1: PrimaryState.clients:type_name -> Clients
+	6,  // 2: ElectionState.clients:type_name -> Clients
+	4,  // 3: AuctionService.RegisterBackupNode:input_type -> Node
+	0,  // 4: AuctionService.PingPrimaryNodeFromBackup:input_type -> Nothing
+	0,  // 5: AuctionService.RegisterClient:input_type -> Nothing
+	1,  // 6: AuctionService.Bid:input_type -> BidRequest
+	0,  // 7: AuctionService.Result:input_type -> Nothing
+	7,  // 8: AuctionService.PrimaryUpdateToBackup:input_type -> PrimaryState
+	8,  // 9: AuctionService.StartElection:input_type -> Candidate
+	4,  // 10: AuctionService.PingElectionHandler:input_type -> Node
+	0,  // 11: AuctionService.ReceivePing:input_type -> Nothing
+	8,  // 12: AuctionService.CompareCandidate:input_type -> Candidate
+	9,  // 13: AuctionService.CompareState:input_type -> ElectionState
+	8,  // 14: AuctionService.ElectLeader:input_type -> Candidate
+	4,  // 15: AuctionService.RegisterBackupNode:output_type -> Node
+	0,  // 16: AuctionService.PingPrimaryNodeFromBackup:output_type -> Nothing
+	4,  // 17: AuctionService.RegisterClient:output_type -> Node
+	2,  // 18: AuctionService.Bid:output_type -> Acknowledgement
+	3,  // 19: AuctionService.Result:output_type -> Outcome
+	0,  // 20: AuctionService.PrimaryUpdateToBackup:output_type -> Nothing
+	2,  // 21: AuctionService.StartElection:output_type -> Acknowledgement
+	0,  // 22: AuctionService.PingElectionHandler:output_type -> Nothing
+	0,  // 23: AuctionService.ReceivePing:output_type -> Nothing
+	8,  // 24: AuctionService.CompareCandidate:output_type -> Candidate
+	9,  // 25: AuctionService.CompareState:output_type -> ElectionState
+	0,  // 26: AuctionService.ElectLeader:output_type -> Nothing
+	15, // [15:27] is the sub-list for method output_type
+	3,  // [3:15] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpc_auction_system_proto_init() }

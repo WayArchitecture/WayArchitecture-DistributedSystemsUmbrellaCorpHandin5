@@ -40,7 +40,7 @@ type AuctionServiceClient interface {
 	RegisterBackupNode(ctx context.Context, in *Node, opts ...grpc.CallOption) (*Node, error)
 	PingPrimaryNodeFromBackup(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error)
 	RegisterClient(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Node, error)
-	Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Acknowledgement, error)
+	Bid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Acknowledgement, error)
 	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
 	PrimaryUpdateToBackup(ctx context.Context, in *PrimaryState, opts ...grpc.CallOption) (*Nothing, error)
 	StartElection(ctx context.Context, in *Candidate, opts ...grpc.CallOption) (*Acknowledgement, error)
@@ -89,7 +89,7 @@ func (c *auctionServiceClient) RegisterClient(ctx context.Context, in *Nothing, 
 	return out, nil
 }
 
-func (c *auctionServiceClient) Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Acknowledgement, error) {
+func (c *auctionServiceClient) Bid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Acknowledgement, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Acknowledgement)
 	err := c.cc.Invoke(ctx, AuctionService_Bid_FullMethodName, in, out, cOpts...)
@@ -186,7 +186,7 @@ type AuctionServiceServer interface {
 	RegisterBackupNode(context.Context, *Node) (*Node, error)
 	PingPrimaryNodeFromBackup(context.Context, *Nothing) (*Nothing, error)
 	RegisterClient(context.Context, *Nothing) (*Node, error)
-	Bid(context.Context, *Amount) (*Acknowledgement, error)
+	Bid(context.Context, *BidRequest) (*Acknowledgement, error)
 	Result(context.Context, *Nothing) (*Outcome, error)
 	PrimaryUpdateToBackup(context.Context, *PrimaryState) (*Nothing, error)
 	StartElection(context.Context, *Candidate) (*Acknowledgement, error)
@@ -214,7 +214,7 @@ func (UnimplementedAuctionServiceServer) PingPrimaryNodeFromBackup(context.Conte
 func (UnimplementedAuctionServiceServer) RegisterClient(context.Context, *Nothing) (*Node, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterClient not implemented")
 }
-func (UnimplementedAuctionServiceServer) Bid(context.Context, *Amount) (*Acknowledgement, error) {
+func (UnimplementedAuctionServiceServer) Bid(context.Context, *BidRequest) (*Acknowledgement, error) {
 	return nil, status.Error(codes.Unimplemented, "method Bid not implemented")
 }
 func (UnimplementedAuctionServiceServer) Result(context.Context, *Nothing) (*Outcome, error) {
@@ -317,7 +317,7 @@ func _AuctionService_RegisterClient_Handler(srv interface{}, ctx context.Context
 }
 
 func _AuctionService_Bid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Amount)
+	in := new(BidRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func _AuctionService_Bid_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: AuctionService_Bid_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).Bid(ctx, req.(*Amount))
+		return srv.(AuctionServiceServer).Bid(ctx, req.(*BidRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

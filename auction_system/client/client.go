@@ -21,6 +21,7 @@ type Client struct {
 	leaderNode   *pb.Node
 	conn         *grpc.ClientConn
 	MAX_NB_NODES int
+	clientId     int
 }
 
 func main() {
@@ -84,6 +85,7 @@ func main() {
 		client:       client,
 		conn:         conn,
 		MAX_NB_NODES: MAX_NB_NODES,
+		clientId:     -1,
 	}
 
 	fmt.Println("To place a bid, type 'Bid' followed by the amount you want to bid.")
@@ -144,13 +146,14 @@ func main() {
 }
 
 func PlaceBid(ctx context.Context, client *Client, amount int64) error {
-	Amount := &pb.Amount{
-		Amount: amount,
+	bidReq := &pb.BidRequest{
+		Amount:   amount,
+		ClientId: int64(client.clientId),
 	}
 
-	bidCtx, bidCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	bidCtx, bidCancel := context.WithTimeout(ctx, 3*time.Second)
 	//Bid
-	var ack, bidErr = client.client.Bid(bidCtx, Amount)
+	var ack, bidErr = client.client.Bid(bidCtx, bidReq)
 
 	bidCancel()
 
@@ -166,6 +169,7 @@ func PlaceBid(ctx context.Context, client *Client, amount int64) error {
 	}
 
 	if ack != nil {
+		client.clientId = int(ack.ClientId)
 		switch ack.Status {
 		case "Fail: Too low":
 			fmt.Println("Bid was not higher than the current highest.")
@@ -177,7 +181,7 @@ func PlaceBid(ctx context.Context, client *Client, amount int64) error {
 }
 
 func ShowResult(ctx context.Context, client *Client) error {
-	resultCtx, resultCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	resultCtx, resultCancel := context.WithTimeout(ctx, 3*time.Second)
 
 	var outcome, resultErr = client.client.Result(resultCtx, &pb.Nothing{})
 

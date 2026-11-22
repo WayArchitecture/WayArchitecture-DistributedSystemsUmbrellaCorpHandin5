@@ -15,6 +15,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 type NodeStruct struct {
@@ -229,16 +230,26 @@ func (s *Server) RegisterClient(ctx context.Context, req *pb.Nothing) (*pb.Node,
 	return s.myPbNode, nil
 }
 
-func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, error) {
+func (s *Server) Bid(ctx context.Context, req *pb.BidRequest) (*pb.Acknowledgement, error) {
 	fmt.Println("Bid... Amount:", req.Amount)
 
 	s.mu.Lock()
+	id := req.ClientId
+	if req.ClientId == -1 {
+		id = int64(len(s.clients))
+		client := pb.Client{
+			HighestBid: 0,
+			ClientId:   id,
+		}
+		s.clients = append(s.clients, &client)
+	}
 
 	//Check whether the auction deadline exists
 	if s.auctionEndTime.IsZero() {
 		s.mu.Unlock()
 		return &pb.Acknowledgement{
-			Status: "Exception",
+			Status:   "Exception",
+			ClientId: id,
 		}, nil
 
 	}
@@ -250,13 +261,14 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 		fmt.Println("Auction has ended!")
 
 		return &pb.Acknowledgement{
-			Status: "Fail: Over",
+			Status:   "Fail: Over",
+			ClientId: id,
 		}, nil
 	}
 	//Check if bid is valid
 	if req.Amount < s.highestBid || req.Amount == s.highestBid {
 		s.mu.Unlock()
-		return &pb.Acknowledgement{Status: "Fail: Too low"}, nil
+		return &pb.Acknowledgement{Status: "Fail: Too low", ClientId: id}, nil
 	}
 
 	//Update backup nodes
@@ -265,7 +277,10 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 		//This now send the same deadline to every backup
 		AuctionEndTime: int32(s.auctionEndTime.Unix()),
 
-		UniqueIdentifier: s.myPbNode.Id}
+		UniqueIdentifier: s.myPbNode.Id,
+
+		Clients: &pb.Clients{Clients: s.clients},
+	}
 
 	for _, element := range s.nodes {
 		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -279,7 +294,8 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 	s.mu.Unlock()
 
 	ack := pb.Acknowledgement{
-		Status: "Success",
+		Status:   "Success",
+		ClientId: id,
 	}
 
 	return &ack, nil
@@ -313,6 +329,12 @@ func (s *Server) PrimaryUpdateToBackup(ctx context.Context, state *pb.PrimarySta
 
 	if state.AuctionEndTime != 0 {
 		s.auctionEndTime = time.Unix(int64(state.AuctionEndTime), 0)
+	}
+
+	s.clients = make([]*pb.Client, len(state.Clients.Clients))
+
+	for i, client := range state.Clients.Clients {
+		s.clients[i] = proto.Clone(client).(*pb.Client)
 	}
 
 	return &pb.Nothing{}, nil
@@ -424,7 +446,7 @@ func (s *Server) StartElection(ctx context.Context, candidate *pb.Candidate) (*p
 
 	//Compare state
 	s.mu.Lock()
-	state := &pb.ElectionState{HighestBid: s.highestBid, AuctionEndTime: int32(s.auctionEndTime.Unix())}
+	state := &pb.ElectionState{HighestBid: s.highestBid, AuctionEndTime: int32(s.auctionEndTime.Unix()), Clients: &pb.Clients{Clients: s.clients}}
 	s.mu.Unlock()
 
 	for _, element := range responsiveNodes {
@@ -433,13 +455,13 @@ func (s *Server) StartElection(ctx context.Context, candidate *pb.Candidate) (*p
 
 		//Dont wait 1 seconds if a ping arrives
 		cancel()
-		if err == nil && priority != nil && priority.HighestBid > state.HighestBid {
+		if err == nil && priority != nil {
 			state = priority
 		}
 	}
 
 	//Update states of all nodes
-	primaryState := &pb.PrimaryState{HighestBid: state.HighestBid, AuctionEndTime: state.AuctionEndTime, UniqueIdentifier: candidate.Id}
+	primaryState := &pb.PrimaryState{HighestBid: state.HighestBid, AuctionEndTime: state.AuctionEndTime, UniqueIdentifier: candidate.Id, Clients: state.Clients}
 	s.PrimaryUpdateToBackup(ctx, primaryState)
 
 	committedNodes := make(map[int]NodeStruct)
@@ -531,6 +553,27 @@ func (s *Server) CompareState(ctx context.Context, state *pb.ElectionState) (*pb
 			HighestBid:     s.highestBid,
 			AuctionEndTime: int32(s.auctionEndTime.Unix()),
 		}, nil
+	}
+
+	for _, client := range s.clients {
+		found := false
+
+		for _, otherClient := range state.Clients.Clients {
+			if client.ClientId == otherClient.ClientId {
+				found = true
+
+				if client.HighestBid > otherClient.HighestBid {
+					otherClient.HighestBid = client.HighestBid
+				}
+
+				break
+			}
+		}
+
+		// Client doesn't exist in the received state
+		if !found {
+			state.Clients.Clients = append(state.Clients.Clients, client)
+		}
 	}
 
 	return state, nil
