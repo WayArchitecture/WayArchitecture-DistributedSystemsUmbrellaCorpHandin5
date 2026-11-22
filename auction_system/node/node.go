@@ -289,13 +289,18 @@ func (s *Server) Result(ctx context.Context, req *pb.Nothing) (*pb.Outcome, erro
 	fmt.Println("Result...")
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.auctionEndTime.IsZero() {
+		return nil, fmt.Errorf("Auction deadline not initialized")
+	}
+
+	isOver := !time.Now().Before(s.auctionEndTime)
 
 	ack := pb.Outcome{
 		HighestBid: s.highestBid,
-		IsOver:     false,
+		IsOver:     isOver,
 	}
-
-	s.mu.Unlock()
 
 	return &ack, nil
 }
@@ -418,7 +423,7 @@ func (s *Server) StartElection(ctx context.Context, candidate *pb.Candidate) (*p
 
 	//Compare state
 	s.mu.Lock()
-	state := &pb.ElectionState{HighestBid: s.highestBid, AuctionEndTime: 0}
+	state := &pb.ElectionState{HighestBid: s.highestBid, AuctionEndTime: int32(s.auctionEndTime.Unix())}
 	s.mu.Unlock()
 
 	for _, element := range responsiveNodes {
@@ -523,7 +528,7 @@ func (s *Server) CompareState(ctx context.Context, state *pb.ElectionState) (*pb
 	if s.highestBid > state.HighestBid {
 		return &pb.ElectionState{
 			HighestBid:     s.highestBid,
-			AuctionEndTime: state.AuctionEndTime,
+			AuctionEndTime: int32(s.auctionEndTime.Unix()),
 		}, nil
 	}
 
