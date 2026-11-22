@@ -117,7 +117,12 @@ func main() {
 		}
 
 		if ack != nil {
-			fmt.Println("ack:", ack.Status)
+			switch ack.Status {
+			case "Fail":
+				fmt.Println("Bid was not higher than the current highest.")
+			case "Success":
+				fmt.Println("Successfully places bid.")
+			}
 		}
 
 		resultCtx, resultCancel := context.WithTimeout(context.Background(), 3*time.Second)

@@ -222,8 +222,29 @@ func (s *Server) RegisterClient(ctx context.Context, req *pb.Nothing) (*pb.Node,
 func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, error) {
 	fmt.Println("Bid... Amount:", req.Amount)
 
+	s.mu.Lock()
+	//Check if bid is valid
+	if req.Amount < s.highestBid || req.Amount == s.highestBid {
+		s.mu.Unlock()
+		return &pb.Acknowledgement{Status: "Fail"}, nil
+	}
+
+	//Update backup nodes
+	state := &pb.PrimaryState{HighestBid: req.Amount, AuctionEndTime: 0, UniqueIdentifier: s.myPbNode.Id}
+
+	for _, element := range s.nodes {
+		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		element.client.PrimaryUpdateToBackup(newCtx, state)
+
+		cancel()
+	}
+
+	s.highestBid = req.Amount
+
+	s.mu.Unlock()
+
 	ack := pb.Acknowledgement{
-		Status: "success",
+		Status: "Success",
 	}
 
 	return &ack, nil
@@ -232,10 +253,14 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 func (s *Server) Result(ctx context.Context, req *pb.Nothing) (*pb.Outcome, error) {
 	fmt.Println("Result...")
 
+	s.mu.Lock()
+
 	ack := pb.Outcome{
-		HighestBid: 10,
+		HighestBid: s.highestBid,
 		IsOver:     false,
 	}
+
+	s.mu.Unlock()
 
 	return &ack, nil
 }
