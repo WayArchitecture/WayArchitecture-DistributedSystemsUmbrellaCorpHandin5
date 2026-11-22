@@ -260,7 +260,12 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 	}
 
 	//Update backup nodes
-	state := &pb.PrimaryState{HighestBid: req.Amount, AuctionEndTime: 0, UniqueIdentifier: s.myPbNode.Id}
+	state := &pb.PrimaryState{HighestBid: req.Amount,
+
+		//This now send the same deadline to every backup
+		AuctionEndTime: int32(s.auctionEndTime.Unix()),
+
+		UniqueIdentifier: s.myPbNode.Id}
 
 	for _, element := range s.nodes {
 		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -299,7 +304,10 @@ func (s *Server) PrimaryUpdateToBackup(ctx context.Context, state *pb.PrimarySta
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.highestBid = state.HighestBid
-	// Update auctionEndTime
+
+	if state.AuctionEndTime != 0 {
+		s.auctionEndTime = time.Unix(int64(state.AuctionEndTime), 0)
+	}
 
 	return &pb.Nothing{}, nil
 }
