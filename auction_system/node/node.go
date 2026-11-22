@@ -36,6 +36,8 @@ type Server struct {
 	electionNumber    int32
 	electionCandidate int32
 
+	auctionEndTime time.Time
+
 	mu sync.Mutex
 }
 
@@ -112,6 +114,14 @@ func main() {
 	}
 
 	server.myPbNode.IsLeader = isLeader
+
+	if isLeader {
+		server.auctionEndTime = time.Now().Add(100 * time.Second)
+
+		fmt.Println("Auction started!")
+		fmt.Println("Auction deadline:", server.auctionEndTime)
+
+	}
 	//fmt.Println("server.myNode.IsLeader: ", server.myNode.IsLeader)
 
 	grpcServer := grpc.NewServer()
@@ -223,6 +233,26 @@ func (s *Server) Bid(ctx context.Context, req *pb.Amount) (*pb.Acknowledgement, 
 	fmt.Println("Bid... Amount:", req.Amount)
 
 	s.mu.Lock()
+
+	//Check whether the auction deadline exists
+	if s.auctionEndTime.IsZero() {
+		s.mu.Unlock()
+		return &pb.Acknowledgement{
+			Status: "Exception",
+		}, nil
+
+	}
+
+	//Checks whether the auction has ended
+	if !time.Now().Before(s.auctionEndTime) {
+		s.mu.Unlock()
+
+		fmt.Println("Auction has ended!")
+
+		return &pb.Acknowledgement{
+			Status: "Fail",
+		}, nil
+	}
 	//Check if bid is valid
 	if req.Amount < s.highestBid || req.Amount == s.highestBid {
 		s.mu.Unlock()
