@@ -4,7 +4,6 @@ import (
 	pb "auction_system/grpc"
 	"context"
 	"fmt"
-	"maps"
 	"net"
 	"os"
 	"os/signal"
@@ -34,12 +33,12 @@ type Server struct {
 	highestBid int64
 
 	electionOngoing   bool
+	electionRunning   bool
 	electionNumber    int32
 	electionCandidate int32
 
 	auctionEndTime time.Time
-
-	mu sync.Mutex
+	mu             sync.Mutex
 }
 
 func main() {
@@ -234,6 +233,14 @@ func (s *Server) Bid(ctx context.Context, req *pb.BidRequest) (*pb.Acknowledgeme
 	fmt.Println("Bid... Amount:", req.Amount)
 
 	s.mu.Lock()
+	if !s.myPbNode.IsLeader || s.electionOngoing {
+		s.mu.Unlock()
+		return &pb.Acknowledgement{
+			Status:   "Fail: Not leader",
+			ClientId: req.ClientId,
+		}, nil
+	}
+
 	id := req.ClientId
 	if req.ClientId == -1 {
 		id = int64(len(s.clients))
@@ -350,27 +357,21 @@ func (s *Server) startElectionIfNeeded() {
 
 	s.electionNumber++
 	s.electionOngoing = true
+	s.electionRunning = true
 	s.electionCandidate = s.myPbNode.Id
 
-	candidate := &pb.Candidate{
-		Id:             s.myPbNode.Id,
-		ElectionNumber: s.electionNumber,
-	}
-
+	term := s.electionNumber
 	s.mu.Unlock()
 
-	fmt.Println("Starting election, term:", candidate.ElectionNumber)
-	go func() {
-		_, err := s.StartElection(context.Background(), candidate)
-		if err != nil {
-			fmt.Println("Election failed:", err)
-		}
-	}()
+	fmt.Println("Starting election, term:", term)
+
+	go s.HandleElection(term)
 }
 
 func (s *Server) StartElection(ctx context.Context, candidate *pb.Candidate) (*pb.Acknowledgement, error) {
-	fmt.Println("Recieved request to start election")
+
 	s.mu.Lock()
+
 	if candidate.ElectionNumber < s.electionNumber {
 		s.mu.Unlock()
 		return &pb.Acknowledgement{Status: "Denied"}, nil
@@ -379,144 +380,274 @@ func (s *Server) StartElection(ctx context.Context, candidate *pb.Candidate) (*p
 	if candidate.ElectionNumber > s.electionNumber {
 		s.electionNumber = candidate.ElectionNumber
 		s.electionOngoing = true
+		s.electionRunning = false
 		s.electionCandidate = candidate.Id
 	} else {
-		if !s.electionOngoing {
-			s.electionOngoing = true
-			s.electionCandidate = candidate.Id
-		} else if candidate.Id < s.electionCandidate {
+		s.electionOngoing = true
+
+		if candidate.Id < s.electionCandidate {
 			s.electionCandidate = candidate.Id
 		}
 	}
 
-	selectedCandidate := s.electionCandidate
+	shouldRun := s.electionCandidate == s.myPbNode.Id &&
+		!s.electionRunning
+
+	term := s.electionNumber
+
+	if shouldRun {
+		s.electionRunning = true
+	}
+
+	s.mu.Unlock()
+
+	if shouldRun {
+		go s.HandleElection(term)
+	}
+
+	return &pb.Acknowledgement{Status: "Accepted"}, nil
+}
+
+func (s *Server) HandleElection(term int32) {
+	defer func() {
+		s.mu.Lock()
+		if s.electionNumber == term {
+			s.electionRunning = false
+		}
+		s.mu.Unlock()
+	}()
+
+	s.mu.Lock()
+	if !s.electionOngoing ||
+		s.electionNumber != term ||
+		s.electionCandidate != s.myPbNode.Id {
+		s.mu.Unlock()
+		return
+	}
 
 	nodes := make(map[int]NodeStruct)
-	maps.Copy(nodes, s.nodes)
-
+	for id, node := range s.nodes {
+		nodes[id] = node
+	}
+	selfID := s.myPbNode.Id
 	s.mu.Unlock()
 
-	if len(nodes) == 0 {
-		fmt.Println("No other nodes available. Electing myself.")
+	// Find reachable nodes and select the lowest ID.
+	responsive := make(map[int]NodeStruct)
+	selectedID := selfID
 
-		s.ElectLeader(ctx, candidate)
+	for id, node := range nodes {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
 
-		return &pb.Acknowledgement{Status: "success"}, nil
-	}
-
-	if candidate.Id != s.myPbNode.Id || selectedCandidate != candidate.Id {
-		return &pb.Acknowledgement{Status: "Accepted"}, nil
-	}
-
-	//Find responsive nodes
-	responsiveNodes := make(map[int]NodeStruct)
-
-	for id, element := range nodes {
-
-		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		ack, err := element.client.StartElection(newCtx, candidate)
-
-		cancel()
-
-		if err != nil || ack == nil {
-			fmt.Println("Node", id, "did not respond")
-			continue
-		}
-
-		responsiveNodes[id] = element
-	}
-
-	//Start ping from candidates to check whether election handler still lives
-	for _, element := range responsiveNodes {
-		newCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		element.client.PingElectionHandler(newCtx, s.myPbNode)
-		cancel()
-	}
-
-	//Compare candidates to find leader
-	for _, element := range responsiveNodes {
-		newCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		priority, err := element.client.CompareCandidate(newCtx, candidate)
-
-		cancel()
-		if err == nil && priority != nil && priority.Id < candidate.Id {
-			candidate = priority
-		}
-	}
-
-	//Compare state
-	s.mu.Lock()
-	state := &pb.ElectionState{HighestBid: s.highestBid, AuctionEndTime: int32(s.auctionEndTime.Unix()), Clients: &pb.Clients{Clients: s.clients}}
-	s.mu.Unlock()
-
-	for _, element := range responsiveNodes {
-		newCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		priority, err := element.client.CompareState(newCtx, state)
-
-		//Dont wait 1 seconds if a ping arrives
-		cancel()
-		if err == nil && priority != nil {
-			state = priority
-		}
-	}
-
-	//Update states of all nodes
-	primaryState := &pb.PrimaryState{HighestBid: state.HighestBid, AuctionEndTime: state.AuctionEndTime, UniqueIdentifier: candidate.Id, Clients: state.Clients}
-	s.PrimaryUpdateToBackup(ctx, primaryState)
-
-	committedNodes := make(map[int]NodeStruct)
-
-	for id, element := range responsiveNodes {
-		rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		_, err := element.client.PrimaryUpdateToBackup(rpcCtx, primaryState)
+		_, err := node.client.ReceivePing(ctx, &pb.Nothing{})
 		cancel()
 
 		if err == nil {
-			committedNodes[id] = element
+			responsive[id] = node
+
+			if int32(id) < selectedID {
+				selectedID = int32(id)
+			}
 		}
 	}
 
-	//Elect new leader and end election
-	for _, element := range committedNodes {
-		rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		_, err := element.client.ElectLeader(rpcCtx, candidate)
+	fmt.Println("Selected election candidate:", selectedID)
+
+	// Announce the selected candidate to reachable nodes.
+	candidate := &pb.Candidate{
+		Id:             selectedID,
+		ElectionNumber: term,
+	}
+
+	accepted := 1 // This node also accepts the candidate.
+
+	for _, node := range responsive {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
+
+		ack, err := node.client.StartElection(ctx, candidate)
 		cancel()
 
-		if err != nil {
-			fmt.Println("Could not notify node of new leader:", err)
+		if err == nil && ack != nil && ack.Status != "Denied" {
+			accepted++
 		}
 	}
 
-	s.ElectLeader(ctx, candidate)
+	// If another node has the lowest ID, let it coordinate.
+	if selectedID != selfID {
+		return
+	}
 
-	fmt.Println("Election complete")
+	// Ask reachable nodes to monitor this election coordinator.
+	for _, node := range responsive {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
 
-	return &pb.Acknowledgement{}, nil
+		_, _ = node.client.PingElectionHandler(ctx, s.myPbNode)
+		cancel()
+	}
+
+	// Require a majority of the configured membership.
+	totalNodes := len(nodes) + 1
+	quorum := totalNodes/2 + 1
+
+	if accepted < quorum {
+		fmt.Println("Election did not receive enough acknowledgements")
+		return
+	}
+
+	// Collect the latest auction state.
+	s.mu.Lock()
+	state := &pb.ElectionState{
+		HighestBid:     s.highestBid,
+		AuctionEndTime: int32(s.auctionEndTime.Unix()),
+		Clients: &pb.Clients{
+			Clients: make([]*pb.Client, len(s.clients)),
+		},
+	}
+
+	for i, client := range s.clients {
+		state.Clients.Clients[i] =
+			proto.Clone(client).(*pb.Client)
+	}
+	s.mu.Unlock()
+
+	for _, node := range responsive {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
+
+		newState, err := node.client.CompareState(ctx, state)
+		cancel()
+
+		if err == nil && newState != nil {
+			state = newState
+		}
+	}
+
+	// Update the new leader's state.
+	primaryState := &pb.PrimaryState{
+		HighestBid:       state.HighestBid,
+		AuctionEndTime:   state.AuctionEndTime,
+		UniqueIdentifier: selectedID,
+		Clients:          state.Clients,
+	}
+
+	_, err := s.PrimaryUpdateToBackup(
+		context.Background(), primaryState,
+	)
+
+	if err != nil {
+		fmt.Println("Could not update local state:", err)
+		return
+	}
+
+	// Replicate recovered state to reachable backups.
+	updated := 1
+
+	for _, node := range responsive {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
+
+		_, err := node.client.PrimaryUpdateToBackup(ctx, primaryState)
+		cancel()
+
+		if err == nil {
+			updated++
+		}
+	}
+
+	if updated < quorum {
+		fmt.Println("Could not replicate state to a majority")
+		return
+	}
+
+	// Notify nodes that the new leader has been selected.
+	confirmed := 1
+
+	for _, node := range responsive {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 2*time.Second,
+		)
+
+		_, err := node.client.ElectLeader(ctx, candidate)
+		cancel()
+
+		if err == nil {
+			confirmed++
+		}
+	}
+
+	if confirmed < quorum {
+		fmt.Println("Not enough nodes confirmed the new leader")
+		return
+	}
+
+	// Elect ourselves locally.
+	_, err = s.ElectLeader(context.Background(), candidate)
+
+	if err != nil {
+		fmt.Println("Could not elect myself:", err)
+		return
+	}
+
+	fmt.Println("Election complete. New leader:", selectedID)
 }
 
 func (s *Server) PingElectionHandler(ctx context.Context, handler *pb.Node) (*pb.Nothing, error) {
+
 	go func() {
-		for s.isElectionOngoing() {
+		for {
 			time.Sleep(3 * time.Second)
-			fmt.Println("pinging election handler...")
 
-			// Tell the grpc call to stop after 3 seconds
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			_, err := s.nodes[int(handler.Id)].client.ReceivePing(ctx, &pb.Nothing{})
+			s.mu.Lock()
 
-			//Dont wait 1 seconds if a ping arrives
+			if !s.electionOngoing ||
+				s.electionCandidate != handler.Id {
+				s.mu.Unlock()
+				return
+			}
+
+			node, exists := s.nodes[int(handler.Id)]
+			s.mu.Unlock()
+
+			if !exists || node.client == nil {
+				break
+			}
+
+			pingCtx, cancel := context.WithTimeout(
+				context.Background(), 1*time.Second,
+			)
+
+			_, err := node.client.ReceivePing(
+				pingCtx, &pb.Nothing{},
+			)
 			cancel()
 
 			if err != nil {
-				fmt.Println("Handler is unreachable:", err)
-				// Start election here
-				candidate := pb.Candidate{Id: s.myPbNode.Id, ElectionNumber: s.electionNumber + 1}
-				fmt.Println("Started election")
-				s.StartElection(context.Background(), &candidate)
-				break
+				fmt.Println("Election coordinator failed")
+
+				s.mu.Lock()
+
+				if s.electionOngoing &&
+					s.electionCandidate == handler.Id {
+					s.electionOngoing = false
+					s.electionRunning = false
+				}
+
+				s.mu.Unlock()
+
+				s.startElectionIfNeeded()
+				return
 			}
 		}
 	}()
+
 	return &pb.Nothing{}, nil
 }
 
@@ -580,38 +711,36 @@ func (s *Server) CompareState(ctx context.Context, state *pb.ElectionState) (*pb
 }
 
 func (s *Server) ElectLeader(ctx context.Context, candidate *pb.Candidate) (*pb.Nothing, error) {
+
 	s.mu.Lock()
 
-	if candidate.ElectionNumber < s.electionNumber {
+	if candidate.ElectionNumber != s.electionNumber {
 		s.mu.Unlock()
-		return nil, fmt.Errorf("Leader from old election")
+		return nil, fmt.Errorf("Election term mismatch")
 	}
 
-	if candidate.ElectionNumber > s.electionNumber {
-		s.electionNumber = candidate.ElectionNumber
+	if candidate.Id != s.electionCandidate {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("Candidate was not selected")
 	}
 
 	if candidate.Id == s.myPbNode.Id {
-		// This node is the new leader.
 		s.myPbNode.IsLeader = true
 		s.leaderNode = nil
 	} else {
-		// This node becomes a backup.
 		node, exists := s.nodes[int(candidate.Id)]
+
 		if !exists {
 			s.mu.Unlock()
-			return nil, fmt.Errorf(
-				"new leader %d is not registered",
-				candidate.Id,
-			)
+			return nil, fmt.Errorf("New leader is not registered")
 		}
 
 		s.myPbNode.IsLeader = false
 		s.leaderNode = &node
 	}
 
-	s.electionCandidate = candidate.Id
 	s.electionOngoing = false
+	s.electionRunning = false
 
 	isBackup := candidate.Id != s.myPbNode.Id
 
@@ -620,6 +749,8 @@ func (s *Server) ElectLeader(ctx context.Context, candidate *pb.Candidate) (*pb.
 	if isBackup {
 		startPingingLeaderNode(s)
 	}
+
+	fmt.Println("New leader:", candidate.Id)
 
 	return &pb.Nothing{}, nil
 }
